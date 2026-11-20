@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Projector Service QR Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 16px; color: #1f2937; }
+    .card { max-width: 480px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    h2 { margin-top: 0; font-size: 1.25rem; color: #0f172a; }
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 16px; display: none; }
+    .field { margin-bottom: 14px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: #374151; }
+    .hint { font-weight: 400; color: #6b7280; font-size: 0.78rem; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 1rem; box-sizing: border-box; background: #fff; }
+    input[readonly] { background-color: #e5e7eb; color: #374151; cursor: not-allowed; font-weight: 600; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    button { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    button:disabled { background: #93c5fd; cursor: not-allowed; }
+    .btn-secondary { background: #4b5563; margin-bottom: 12px; }
+    .btn-native-scan { background: #0284c7; margin-top: 0; margin-bottom: 14px; display: none; }
+    .btn-native-scan:hover { background: #0369a1; }
+
+    /* Asset Name + Manual Button Row */
+    .asset-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .asset-input-row input {
+      flex: 1;
+      min-width: 0;
+    }
+    .btn-manual {
+      width: auto;
+      margin-top: 0;
+      padding: 0 14px;
+      background: #4f46e5;
+      font-size: 0.92rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-manual:hover {
+      background: #4338ca;
+    }
+
+    .action-btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 2px;
+      margin-bottom: 4px;
+    }
+    .btn-history {
+      background: #0f766e;
+      margin-top: 0;
+      font-size: 0.92rem;
+      padding: 11px 8px;
+    }
+    .btn-history:disabled {
+      background: #99f6e4;
+      color: #115e59;
+      opacity: 0.65;
+    }
+    .btn-update-room {
+      background: #d97706;
+      margin-top: 0;
+      font-size: 0.92rem;
+      padding: 11px 8px;
+    }
+    .btn-update-room:disabled {
+      background: #fde68a;
+      color: #92400e;
+      opacity: 0.65;
+    }
+    .status { padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 0.9rem; display: none; }
+    .status.error { background: #fee2e2; color: #991b1b; display: block; }
+    .status.success { background: #dcfce7; color: #166534; display: block; }
+    .status.info { background: #e0f2fe; color: #075985; display: block; }
+
+    /* Shared Pop-up Modal Overlay */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.65);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 9999;
+    }
+    .modal-box {
+      background: #fff;
+      width: 100%;
+      max-width: 360px;
+      border-radius: 14px;
+      padding: 24px 20px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      animation: popIn 0.18s ease-out;
+    }
+    @keyframes popIn {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .modal-icon {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 12px;
+      border-radius: 50%;
+      background: #dcfce7;
+      color: #16a34a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: bold;
+    }
+    .modal-title {
+      margin: 0 0 8px;
+      font-size: 1.2rem;
+      color: #0f172a;
+    }
+    .modal-msg {
+      margin: 0 0 18px;
+      font-size: 0.92rem;
+      color: #4b5563;
+      line-height: 1.45;
+    }
+    .modal-close-btn {
+      background: #16a34a;
+      margin-top: 0;
+    }
+    .modal-close-btn:hover {
+      background: #15803d;
+    }
+
+    /* Manual Entry Prefix Input Group */
+    .prefix-input-group {
+      display: flex;
+      align-items: stretch;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .prefix-input-group:focus-within {
+      border-color: #4f46e5;
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+    }
+    .prefix-badge {
+      background: #e5e7eb;
+      color: #1f2937;
+      font-weight: 700;
+      font-size: 1rem;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      border-right: 1px solid #d1d5db;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .prefix-input-group input {
+      border: none;
+      border-radius: 0;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    .prefix-input-group input:focus {
+      outline: none;
+    }
+    .manual-error-text {
+      color: #991b1b;
+      font-size: 0.82rem;
+      margin-top: 6px;
+      display: none;
+    }
+    .btn-manual-ok {
+      background: #4f46e5;
+      margin-top: 0;
+    }
+
+    /* Scrollable Service History Dialog */
+    .history-modal-box {
+      background: #fff;
+      width: 100%;
+      max-width: 440px;
+      max-height: 82vh;
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+      animation: popIn 0.18s ease-out;
+    }
+    .history-header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f8fafc;
+    }
+    .history-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: #0f172a;
+    }
+    .history-subtitle {
+      margin: 4px 0 0;
+      font-size: 0.84rem;
+      color: #475569;
+      font-weight: 600;
+    }
+    .history-body {
+      padding: 12px 18px;
+      overflow-y: auto;
+      flex: 1;
+      text-align: left;
+    }
+    .history-empty {
+      text-align: center;
+      padding: 24px 8px;
+      color: #6b7280;
+      font-size: 0.92rem;
+    }
+    .history-row {
+      padding: 10px 0;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+    .history-row:last-child {
+      border-bottom: none;
+    }
+    .history-row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+    .history-date {
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .history-cost {
+      font-weight: 700;
+      color: #0f766e;
+      white-space: nowrap;
+    }
+    .history-type {
+      color: #374151;
+    }
+    .history-footer {
+      padding: 12px 18px 16px;
+      border-top: 1px solid #e5e7eb;
+      background: #f8fafc;
+    }
+    .history-total-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #065f46;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+    .history-close-btn {
+      background: #334155;
+      margin-top: 0;
+    }
+
+    /* Update Room Pop-up Dialog */
+    .room-modal-box {
+      background: #fff;
+      width: 100%;
+      max-width: 400px;
+      border-radius: 14px;
+      overflow: hidden;
+      text-align: left;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+      animation: popIn 0.18s ease-out;
+    }
+    .room-modal-body {
+      padding: 16px 18px 18px;
+    }
+    .current-location-card {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
+    }
+    .current-location-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .current-location-row:last-child {
+      margin-bottom: 0;
+    }
+    .current-location-label {
+      color: #475569;
+      font-weight: 600;
+    }
+    .current-location-val {
+      color: #0f172a;
+      font-weight: 700;
+    }
+    .room-result-banner {
+      display: none;
+      text-align: center;
+      padding: 14px 12px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+    .room-result-banner.completed {
+      display: block;
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      color: #166534;
+    }
+    .room-result-banner.error {
+      display: block;
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+      font-size: 0.9rem;
+    }
+    .room-countdown-sub {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-top: 4px;
+      color: #15803d;
+    }
+    .room-btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .btn-room-cancel {
+      background: #475569;
+      margin-top: 0;
+    }
+    .btn-room-save {
+      background: #d97706;
+      margin-top: 0;
+    }
+    .btn-room-save:disabled {
+      background: #fcd34d;
+      color: #78350f;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Projector Repair Log</h2>
+    <div id="statusBox" class="status"></div>
+
+    <!-- Telegram Native QR Scanner Button (Zero Permission Prompts) -->
+    <button type="button" id="nativeScanBtn" class="btn-native-scan" onclick="openTelegramQrScanner()">?? Scan Projector QR</button>
+
+    <!-- Fallback Browser QR Reader -->
+    <div id="reader"></div>
+    <button type="button" id="rescanBtn" class="btn-secondary" style="display:none;" onclick="resetAndScan()">Scan Another QR</button>
+
+    <form id="serviceForm">
+      <!-- Auto-filled & Locked Fields from Asset_ID Sheet -->
+      <div class="field">
+        <label>Asset Name (From QR)</label>
+        <div class="asset-input-row">
+          <input type="text" id="assetName" readonly required placeholder="Scan projector QR above...">
+          <button type="button" id="manualBtn" class="btn-manual" onclick="openManualModal()">??</button>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>Brand</label>
+          <input type="text" id="brand" readonly required>
+        </div>
+        <div class="field">
+          <label>Model</label>
+          <input type="text" id="model" readonly required>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Serial No</label>
+        <input type="text" id="serialNo" readonly required>
+      </div>
+
+      <!-- Service History & Update Room Buttons -->
+      <div class="action-btn-row">
+        <button type="button" id="historyBtn" class="btn-history" disabled onclick="openServiceHistory()">?? History</button>
+        <button type="button" id="updateRoomBtn" class="btn-update-room" disabled onclick="openUpdateRoomModal()">?? Update Room</button>
+      </div>
+
+      <hr style="border:0; border-top:1px solid #e5e7eb; margin:16px 0;">
+
+      <!-- Location & Service Entry Fields -->
+      <div class="grid-2">
+        <div class="field">
+          <label>Room No *</label>
+          <input type="text" id="roomNo" required placeholder="e.g., S-105">
+        </div>
+        <div class="field">
+          <label>Campus</label>
+          <input type="text" id="campus" readonly placeholder="Auto-filled...">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Purchase Request</label>
+        <input type="text" id="poNo" placeholder="e.g., IT2601_006">
+      </div>
+
+      <div class="field">
+        <label>Date <span class="hint">(Myanmar Time)</span></label>
+        <input type="date" id="date">
+      </div>
+
+      <div class="field">
+        <label>Service Type *</label>
+        <select id="serviceType" required>
+          <option value="" disabled selected>Select service type...</option>
+          <option value="Projector LAMP Replacement">Projector LAMP Replacement</option>
+          <option value="Projector LEN Replacement">Projector LEN Replacement</option>
+          <option value="Power Supply Replacement">Power Supply Replacement</option>
+          <option value="Board Replacement">Board Replacement</option>
+          <option value="Servicing">Servicing</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Service Charges (MMK)</label>
+        <input type="number" id="serviceCharges" min="0" step="1" placeholder="e.g., 280000">
+      </div>
+
+      <div class="field">
+        <label>Remark</label>
+        <textarea id="remark" rows="2" placeholder="Optional remarks..."></textarea>
+      </div>
+
+      <button type="submit" id="submitBtn" disabled>Submit</button>
+    </form>
+  </div>
+
+  <!-- Manual Asset Entry Pop-up Dialog -->
+  <div id="manualModal" class="modal-overlay">
+    <div class="room-modal-box">
+      <div class="history-header">
+        <h3>Manual Asset Lookup</h3>
+        <div class="history-subtitle">Enter the 3-digit projector number</div>
+      </div>
+      <div class="room-modal-body">
+        <form id="manualEntryForm">
+          <div class="field">
+            <label>Projector ID *</label>
+            <div class="prefix-input-group">
+              <span class="prefix-badge">MCTA-IT PROJ_</span>
+              <input
+                type="text"
+                id="manualDigitsInput"
+                inputmode="numeric"
+                maxlength="3"
+                placeholder="001"
+                autocomplete="off"
+                oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 3)"
+              >
+            </div>
+            <div id="manualErrorMsg" class="manual-error-text">Please enter exactly 3 digits (e.g., 001).</div>
+          </div>
+
+          <div class="room-btn-row">
+            <button type="button" class="btn-room-cancel" onclick="closeManualModal()">Close</button>
+            <button type="submit" class="btn-manual-ok">OK</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success Confirmation Pop-up Modal -->
+  <div id="successModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-icon">?</div>
+      <h3 class="modal-title">Record Saved!</h3>
+      <p id="modalMessage" class="modal-msg"></p>
+      <button type="button" id="closeModalBtn" class="modal-close-btn" onclick="closeSuccessModal()">Close</button>
+    </div>
+  </div>
+
+  <!-- Service History Pop-up Dialog -->
+  <div id="historyModal" class="modal-overlay">
+    <div class="history-modal-box">
+      <div class="history-header">
+        <h3>Service History</h3>
+        <div id="historySubtitle" class="history-subtitle"></div>
+      </div>
+      <div id="historyList" class="history-body"></div>
+      <div class="history-footer">
+        <div class="history-total-bar">
+          <span id="historyCountLabel">Total Servicing Cost</span>
+          <span id="historyTotalCost">0 MMK</span>
+        </div>
+        <button type="button" class="history-close-btn" onclick="closeHistoryModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Update Room & Campus Pop-up Dialog -->
+  <div id="roomModal" class="modal-overlay">
+    <div class="room-modal-box">
+      <div class="history-header">
+        <h3>Update Room & Campus</h3>
+        <div id="roomModalSubtitle" class="history-subtitle"></div>
+      </div>
+      <div class="room-modal-body">
+        <div class="current-location-card">
+          <div class="current-location-row">
+            <span class="current-location-label">Current Room No:</span>
+            <span id="currentRoomDisplay" class="current-location-val">-</span>
+          </div>
+          <div class="current-location-row">
+            <span class="current-location-label">Current Campus:</span>
+            <span id="currentCampusDisplay" class="current-location-val">-</span>
+          </div>
+        </div>
+
+        <div id="roomResultBanner" class="room-result-banner"></div>
+
+        <form id="updateRoomForm">
+          <div class="field">
+            <label>New Room No *</label>
+            <input type="text" id="newRoomInput" required placeholder="e.g., S-204">
+          </div>
+
+          <div class="field">
+            <label>Campus Location *</label>
+            <select id="newCampusSelect" required>
+              <option value="" disabled selected>Select campus...</option>
+              <option value="Main Campus">Main Campus</option>
+              <option value="Super City">Super City</option>
+            </select>
+          </div>
+
+          <div class="room-btn-row">
+            <button type="button" class="btn-room-cancel" onclick="closeUpdateRoomModal()">Close</button>
+            <button type="submit" id="confirmRoomUpdateBtn" class="btn-room-save">Update</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const WEBHOOK_URL = 'https://hook.us2.make.com/g1i8uavahn4fa5e8588vhmyztve237l4';
+    const ASSET_PREFIX = 'MCTA-IT PROJ_';
+    let html5QrCode;
+    let isProcessingScan = false;
+    let currentAssetRoom = '-';
+    let currentAssetCampus = '-';
+    let roomAutoCloseTimer = null;
+    let roomCountdownInterval = null;
+
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
+    }
+
+    function canUseTelegramNativeScanner() {
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (!tg || typeof tg.showScanQrPopup !== 'function') return false;
+      const platform = (tg.platform || '').toLowerCase();
+      return platform === 'android' || platform === 'ios';
+    }
+
+    function showStatus(msg, type) {
+      const box = document.getElementById('statusBox');
+      box.textContent = msg;
+      box.className = 'status ' + type;
+    }
+
+    function hideStatus() {
+      const box = document.getElementById('statusBox');
+      box.textContent = '';
+      box.className = 'status';
+    }
+
+    async function lookupAsset(assetCode) {
+      if (isProcessingScan) return;
+      isProcessingScan = true;
+
+      const scannedAssetName = assetCode.trim();
+      try {
+        if (html5QrCode) await html5QrCode.stop();
+      } catch (e) {}
+
+      if (canUseTelegramNativeScanner()) {
+        const nativeBtn = document.getElementById('nativeScanBtn');
+        nativeBtn.style.display = 'block';
+        nativeBtn.textContent = '?? Scan Another QR';
+      } else {
+        document.getElementById('reader').style.display = 'none';
+        document.getElementById('rescanBtn').style.display = 'block';
+      }
+
+      document.getElementById('assetName').value = scannedAssetName;
+      showStatus(`Matching "${scannedAssetName}" in Asset_ID sheet...`, 'info');
+
+      try {
+        const body = new URLSearchParams({
+          action: 'lookup',
+          assetName: scannedAssetName
+        });
+
+        const res = await fetch(WEBHOOK_URL, { method: 'POST', body });
+        const data = await res.json();
+
+        if (data.found) {
+          document.getElementById('assetName').value = data.assetName;
+          document.getElementById('brand').value = data.brand;
+          document.getElementById('model').value = data.model;
+          document.getElementById('serialNo').value = data.serialNo;
+
+          const fetchedRoom = (data.roomNo && String(data.roomNo).trim() !== '') ? String(data.roomNo).trim() : '';
+          const fetchedCampus = (data.campusName && String(data.campusName).trim() !== '') ? String(data.campusName).trim() : '';
+
+          document.getElementById('roomNo').value = fetchedRoom;
+          document.getElementById('campus').value = fetchedCampus;
+
+          currentAssetRoom = fetchedRoom !== '' ? fetchedRoom : 'Not assigned';
+          currentAssetCampus = fetchedCampus !== '' ? fetchedCampus : 'Not assigned';
+
+          document.getElementById('submitBtn').disabled = false;
+          document.getElementById('historyBtn').disabled = false;
+          document.getElementById('updateRoomBtn').disabled = false;
+          showStatus(`Name: ${data.assetName} (${data.brand} ${data.model})`, 'success');
+        } else {
+          document.getElementById('brand').value = '';
+          document.getElementById('model').value = '';
+          document.getElementById('serialNo').value = '';
+          document.getElementById('roomNo').value = '';
+          document.getElementById('campus').value = '';
+          currentAssetRoom = '-';
+          currentAssetCampus = '-';
+          document.getElementById('historyBtn').disabled = true;
+          document.getElementById('updateRoomBtn').disabled = true;
+          showStatus(`"${scannedAssetName}" was not found in Database.`, 'error');
+        }
+      } catch (err) {
+        showStatus('Connection error. Make sure your Make.com scenario is ON.', 'error');
+      } finally {
+        isProcessingScan = false;
+      }
+    }
+
+    function onScanSuccess(decodedText) {
+      lookupAsset(decodedText);
+    }
+
+    function openTelegramQrScanner() {
+      if (isProcessingScan) return;
+      const tg = window.Telegram.WebApp;
+      tg.showScanQrPopup({ text: 'Point camera at projector QR' }, function (scannedText) {
+        if (scannedText && scannedText.trim() !== '') {
+          if (typeof tg.closeScanQrPopup === 'function') {
+            tg.closeScanQrPopup();
+          }
+          lookupAsset(scannedText.trim());
+          return true;
+        }
+        return false;
+      });
+    }
+
+    function openManualModal() {
+      const input = document.getElementById('manualDigitsInput');
+      const errorMsg = document.getElementById('manualErrorMsg');
+      input.value = '';
+      errorMsg.style.display = 'none';
+      document.getElementById('manualModal').style.display = 'flex';
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function closeManualModal() {
+      document.getElementById('manualModal').style.display = 'none';
+    }
+
+    document.getElementById('manualEntryForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const digits = document.getElementById('manualDigitsInput').value.trim();
+      const errorMsg = document.getElementById('manualErrorMsg');
+
+      if (!/^\d{3}$/.test(digits)) {
+        errorMsg.style.display = 'block';
+        document.getElementById('manualDigitsInput').focus();
+        return;
+      }
+
+      errorMsg.style.display = 'none';
+      const combinedAssetName = `${ASSET_PREFIX}${digits}`;
+      closeManualModal();
+      lookupAsset(combinedAssetName);
+    });
+
+    function startScanner() {
+      isProcessingScan = false;
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('historyBtn').disabled = true;
+      document.getElementById('updateRoomBtn').disabled = true;
+
+      if (canUseTelegramNativeScanner()) {
+        document.getElementById('reader').style.display = 'none';
+        document.getElementById('rescanBtn').style.display = 'none';
+        const nativeBtn = document.getElementById('nativeScanBtn');
+        nativeBtn.style.display = 'block';
+        nativeBtn.textContent = '?? Scan Projector QR';
+        openTelegramQrScanner();
+        return;
+      }
+
+      document.getElementById('nativeScanBtn').style.display = 'none';
+      document.getElementById('reader').style.display = 'block';
+      document.getElementById('rescanBtn').style.display = 'none';
+
+      html5QrCode = new Html5Qrcode("reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        onScanSuccess
+      ).catch(err => showStatus('Camera permission required: ' + err, 'error'));
+    }
+
+    function resetAndScan() {
+      document.getElementById('serviceForm').reset();
+      document.getElementById('assetName').value = '';
+      document.getElementById('brand').value = '';
+      document.getElementById('model').value = '';
+      document.getElementById('serialNo').value = '';
+      document.getElementById('roomNo').value = '';
+      document.getElementById('campus').value = '';
+      currentAssetRoom = '-';
+      currentAssetCampus = '-';
+      hideStatus();
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Submit';
+      document.getElementById('historyBtn').disabled = true;
+      document.getElementById('updateRoomBtn').disabled = true;
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      startScanner();
+    }
+
+    function showSuccessModal(assetName, serviceType, loggedDate) {
+      document.getElementById('modalMessage').innerHTML =
+        `<strong>${assetName}</strong><br>${serviceType}<br>Logged Date: <strong>${loggedDate}</strong>`;
+      document.getElementById('successModal').style.display = 'flex';
+    }
+
+    function closeSuccessModal() {
+      document.getElementById('successModal').style.display = 'none';
+      resetAndScan();
+    }
+
+    function closeHistoryModal() {
+      document.getElementById('historyModal').style.display = 'none';
+    }
+
+    function clearRoomTimers() {
+      if (roomAutoCloseTimer) {
+        clearTimeout(roomAutoCloseTimer);
+        roomAutoCloseTimer = null;
+      }
+      if (roomCountdownInterval) {
+        clearInterval(roomCountdownInterval);
+        roomCountdownInterval = null;
+      }
+    }
+
+    function openUpdateRoomModal() {
+      const assetNameVal = document.getElementById('assetName').value.trim();
+      const brandVal = document.getElementById('brand').value.trim();
+      const modelVal = document.getElementById('model').value.trim();
+      if (!assetNameVal) return;
+
+      clearRoomTimers();
+      document.getElementById('roomModalSubtitle').textContent = `${assetNameVal} (${brandVal} ${modelVal})`;
+      document.getElementById('currentRoomDisplay').textContent = currentAssetRoom;
+      document.getElementById('currentCampusDisplay').textContent = currentAssetCampus;
+
+      document.getElementById('updateRoomForm').reset();
+      const banner = document.getElementById('roomResultBanner');
+      banner.className = 'room-result-banner';
+      banner.innerHTML = '';
+
+      const updateBtn = document.getElementById('confirmRoomUpdateBtn');
+      updateBtn.disabled = false;
+      updateBtn.textContent = 'Update';
+
+      document.getElementById('roomModal').style.display = 'flex';
+    }
+
+    function closeUpdateRoomModal() {
+      clearRoomTimers();
+      document.getElementById('roomModal').style.display = 'none';
+    }
+
+    document.getElementById('updateRoomForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearRoomTimers();
+
+      const assetNameVal = document.getElementById('assetName').value.trim();
+      const newRoomVal = document.getElementById('newRoomInput').value.trim();
+      const newCampusVal = document.getElementById('newCampusSelect').value;
+
+      const oldRoomStr = (currentAssetRoom && currentAssetRoom !== 'Not assigned' && currentAssetRoom !== '-')
+        ? currentAssetRoom
+        : 'Unassigned';
+      const oldCampusStr = (currentAssetCampus && currentAssetCampus !== 'Not assigned' && currentAssetCampus !== '-')
+        ? currentAssetCampus
+        : 'Unassigned';
+      const relocationLog = `${oldRoomStr}, ${oldCampusStr} to ${newRoomVal}, ${newCampusVal}`;
+
+      const updateBtn = document.getElementById('confirmRoomUpdateBtn');
+      const banner = document.getElementById('roomResultBanner');
+      updateBtn.disabled = true;
+      updateBtn.textContent = 'Updating...';
+      banner.className = 'room-result-banner';
+
+      const body = new URLSearchParams({
+        action: 'updateRoom',
+        assetName: assetNameVal,
+        newRoom: newRoomVal,
+        newCampus: newCampusVal,
+        relocationLog: relocationLog
+      });
+
+      try {
+        const res = await fetch(WEBHOOK_URL, { method: 'POST', body });
+        const rawText = await res.text();
+        const result = rawText === 'Accepted' ? { success: true } : JSON.parse(rawText);
+
+        if (result.success) {
+          currentAssetRoom = newRoomVal;
+          currentAssetCampus = newCampusVal;
+          document.getElementById('currentRoomDisplay').textContent = newRoomVal;
+          document.getElementById('currentCampusDisplay').textContent = newCampusVal;
+
+          document.getElementById('roomNo').value = newRoomVal;
+          document.getElementById('campus').value = newCampusVal;
+
+          updateBtn.textContent = 'Update';
+
+          let secondsLeft = 5;
+          banner.className = 'room-result-banner completed';
+          banner.innerHTML = `Completed<span class="room-countdown-sub">Closing automatically in ${secondsLeft}s...</span>`;
+
+          roomCountdownInterval = setInterval(() => {
+            secondsLeft -= 1;
+            if (secondsLeft > 0) {
+              const sub = banner.querySelector('.room-countdown-sub');
+              if (sub) sub.textContent = `Closing automatically in ${secondsLeft}s...`;
+            }
+          }, 1000);
+
+          roomAutoCloseTimer = setTimeout(() => {
+            closeUpdateRoomModal();
+          }, 5000);
+        } else {
+          throw new Error('Update failed');
+        }
+      } catch (err) {
+        banner.className = 'room-result-banner error';
+        banner.textContent = 'Error updating room. Please check Make.com scenario.';
+        updateBtn.disabled = false;
+        updateBtn.textContent = 'Update';
+      }
+    });
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text ?? '';
+      return div.innerHTML;
+    }
+
+    async function openServiceHistory() {
+      const assetNameVal = document.getElementById('assetName').value.trim();
+      const brandVal = document.getElementById('brand').value.trim();
+      const modelVal = document.getElementById('model').value.trim();
+      if (!assetNameVal) return;
+
+      document.getElementById('historySubtitle').textContent = `${assetNameVal} (${brandVal} ${modelVal})`;
+      document.getElementById('historyList').innerHTML = '<div class="history-empty">Loading service history...</div>';
+      document.getElementById('historyCountLabel').textContent = 'Total Servicing Cost';
+      document.getElementById('historyTotalCost').textContent = '...';
+      document.getElementById('historyModal').style.display = 'flex';
+
+      try {
+        const body = new URLSearchParams({
+          action: 'history',
+          assetName: assetNameVal
+        });
+
+        const res = await fetch(WEBHOOK_URL, { method: 'POST', body });
+        const rawText = await res.text();
+        const data = rawText === 'Accepted' ? { history: [] } : JSON.parse(rawText);
+        const records = Array.isArray(data.history) ? data.history : [];
+
+        if (records.length === 0) {
+          document.getElementById('historyList').innerHTML =
+            '<div class="history-empty">No previous service records found for this asset.</div>';
+          document.getElementById('historyCountLabel').textContent = 'Total Servicing Cost (0 records)';
+          document.getElementById('historyTotalCost').textContent = '0 MMK';
+          return;
+        }
+
+        let totalCost = 0;
+        const rowsHtml = records.map((item, idx) => {
+          const vals = Object.values(item);
+          const dateVal = item.date ?? item['Date (H)'] ?? vals[0] ?? '-';
+          const typeVal = item.serviceType ?? item['Service Type (I)'] ?? vals[1] ?? '-';
+          const rawCost = item.cost ?? item['Parts & Servicing Cost (MMK) (J)'] ?? vals[2] ?? 0;
+
+          const numericCost = parseFloat(String(rawCost).replace(/[^0-9.-]/g, '')) || 0;
+          totalCost += numericCost;
+          const formattedCost = numericCost > 0 ? `${numericCost.toLocaleString('en-US')} MMK` : '0 MMK';
+
+          return `
+            <div class="history-row">
+              <div class="history-row-top">
+                <span class="history-date">${idx + 1}. ${escapeHtml(String(dateVal))}</span>
+                <span class="history-cost">${escapeHtml(formattedCost)}</span>
+              </div>
+              <div class="history-type">${escapeHtml(String(typeVal))}</div>
+            </div>
+          `;
+        }).join('');
+
+        document.getElementById('historyList').innerHTML = rowsHtml;
+        document.getElementById('historyCountLabel').textContent =
+          `Total Servicing Cost (${records.length} ${records.length === 1 ? 'record' : 'records'})`;
+        document.getElementById('historyTotalCost').textContent = `${totalCost.toLocaleString('en-US')} MMK`;
+      } catch (err) {
+        document.getElementById('historyList').innerHTML =
+          '<div class="history-empty" style="color:#991b1b;">Error loading service history. Please check Make.com scenario.</div>';
+        document.getElementById('historyTotalCost').textContent = '-';
+      }
+    }
+
+    document.getElementById('serviceForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      const assetNameVal = document.getElementById('assetName').value;
+      const serviceTypeVal = document.getElementById('serviceType').value;
+
+      const body = new URLSearchParams({
+        action: 'submit',
+        assetName: assetNameVal,
+        brand: document.getElementById('brand').value,
+        model: document.getElementById('model').value,
+        serialNo: document.getElementById('serialNo').value,
+        roomNo: document.getElementById('roomNo').value.trim(),
+        campus: document.getElementById('campus').value.trim(),
+        poNo: document.getElementById('poNo').value.trim(),
+        date: document.getElementById('date').value,
+        serviceType: serviceTypeVal,
+        serviceCharges: document.getElementById('serviceCharges').value,
+        remark: document.getElementById('remark').value.trim()
+      });
+
+      try {
+        const res = await fetch(WEBHOOK_URL, { method: 'POST', body });
+        const result = await res.json();
+
+        if (result.success) {
+          btn.textContent = 'Submit';
+          showSuccessModal(assetNameVal, serviceTypeVal, result.loggedDate);
+        } else {
+          throw new Error('Submission failed');
+        }
+      } catch (err) {
+        showStatus('Error saving record. Please try again.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Submit';
+      }
+    });
+
+    window.onload = startScanner;
+  </script>
+</body>
+</html>
