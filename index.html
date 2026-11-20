@@ -367,7 +367,7 @@
     <div id="statusBox" class="status"></div>
 
     <!-- Telegram Native QR Scanner Button (Zero Permission Prompts) -->
-    <button type="button" id="nativeScanBtn" class="btn-native-scan" onclick="openTelegramQrScanner()">?? Scan Projector QR</button>
+    <button type="button" id="nativeScanBtn" class="btn-native-scan" onclick="openTelegramQrScanner()">📷 Scan Projector QR</button>
 
     <!-- Fallback Browser QR Reader -->
     <div id="reader"></div>
@@ -379,7 +379,7 @@
         <label>Asset Name (From QR)</label>
         <div class="asset-input-row">
           <input type="text" id="assetName" readonly required placeholder="Scan projector QR above...">
-          <button type="button" id="manualBtn" class="btn-manual" onclick="openManualModal()">??</button>
+          <button type="button" id="manualBtn" class="btn-manual" onclick="openManualModal()">⌨️</button>
         </div>
       </div>
 
@@ -401,8 +401,8 @@
 
       <!-- Service History & Update Room Buttons -->
       <div class="action-btn-row">
-        <button type="button" id="historyBtn" class="btn-history" disabled onclick="openServiceHistory()">?? History</button>
-        <button type="button" id="updateRoomBtn" class="btn-update-room" disabled onclick="openUpdateRoomModal()">?? Update Room</button>
+        <button type="button" id="historyBtn" class="btn-history" disabled onclick="openServiceHistory()">📋 History</button>
+        <button type="button" id="updateRoomBtn" class="btn-update-room" disabled onclick="openUpdateRoomModal()">📍 Update Room</button>
       </div>
 
       <hr style="border:0; border-top:1px solid #e5e7eb; margin:16px 0;">
@@ -494,7 +494,7 @@
   <!-- Success Confirmation Pop-up Modal -->
   <div id="successModal" class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-icon">?</div>
+      <div class="modal-icon">✓</div>
       <h3 class="modal-title">Record Saved!</h3>
       <p id="modalMessage" class="modal-msg"></p>
       <button type="button" id="closeModalBtn" class="modal-close-btn" onclick="closeSuccessModal()">Close</button>
@@ -610,7 +610,7 @@
       if (canUseTelegramNativeScanner()) {
         const nativeBtn = document.getElementById('nativeScanBtn');
         nativeBtn.style.display = 'block';
-        nativeBtn.textContent = '?? Scan Another QR';
+        nativeBtn.textContent = '📷 Scan Another QR';
       } else {
         document.getElementById('reader').style.display = 'none';
         document.getElementById('rescanBtn').style.display = 'block';
@@ -726,7 +726,7 @@
         document.getElementById('rescanBtn').style.display = 'none';
         const nativeBtn = document.getElementById('nativeScanBtn');
         nativeBtn.style.display = 'block';
-        nativeBtn.textContent = '?? Scan Projector QR';
+        nativeBtn.textContent = '📷 Scan Projector QR';
         openTelegramQrScanner();
         return;
       }
